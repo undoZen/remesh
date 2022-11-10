@@ -142,28 +142,21 @@ export const useRemeshDomain = function <T extends RemeshDomainDefinition, U ext
   domainAction: RemeshDomainAction<T, U>,
 ) {
   const store = useRemeshStore()
-  const domain = store.getDomain(domainAction)
 
   useEffect(() => {
     store.igniteDomain(domainAction)
   }, [store, domainAction])
 
   const domainKey = store.getKey(domainAction)
-  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
 
-  useEffect(() => {
-    return () => {
-      subscriptionRef.current?.unsubscribe()
-      subscriptionRef.current = null
-    }
+  const getSnapshot = useCallback(() => {
+    return store.getDomain(domainAction)
   }, [store, domainKey])
-
-  useEffect(() => {
-    if (subscriptionRef.current !== null) {
-      return
-    }
-    subscriptionRef.current = store.subscribeDomain(domainAction)
-  }, [store, domainAction])
+  const subscribe = useCallback(() => {
+    const subscription = store.subscribeDomain(domainAction)
+    return () => subscription.unsubscribe()
+  }, [])
+  const domain = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   return domain
 }
