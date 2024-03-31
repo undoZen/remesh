@@ -456,6 +456,25 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
     return createQueryStorage(queryAction)
   }
 
+  const getQueryStorageObservable = <T extends Args<Serializable>, U>(
+    queryAction: RemeshQueryAction<T, U>,
+  ): Observable<U> => {
+    const queryStorage = getQueryStorage(queryAction)
+
+    return new Observable<U>((subscriber) => {
+      const subscription = queryStorage.subject.subscribe(subscriber)
+      queryStorage.refCount += 1
+
+      return () => {
+        queryStorage.refCount -= 1
+        subscription.unsubscribe()
+        if (queryStorage.refCount === 0) {
+          clearQueryStorageIfNeeded(queryStorage)
+        }
+      }
+    })
+  }
+
   const domainStorageWeakMap = new WeakMap<RemeshDomainAction<any, any>, RemeshDomainStorage<any, any>>()
 
   const createDomainStorage = <T extends RemeshDomainDefinition, U extends Args<Serializable>>(
@@ -819,8 +838,7 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
       throw new Error(`Unexpected input in fromEvent(..): ${Event}`)
     },
     fromQuery: (queryAction) => {
-      const queryStorage = getQueryStorage(queryAction)
-      return queryStorage.observable
+      return getQueryStorageObservable(queryAction)
     },
   }
 
@@ -1143,21 +1161,7 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
     queryAction: RemeshQueryAction<T, U>,
     subscriber: ((data: U) => unknown) | Partial<Observer<U>>,
   ): Subscription => {
-    const queryStorage = getQueryStorage(queryAction)
-
-    const observable = new Observable<U>((subscriber) => {
-      const subscription = queryStorage.subject.subscribe(subscriber)
-      queryStorage.refCount += 1
-
-      return () => {
-        queryStorage.refCount -= 1
-        subscription.unsubscribe()
-        if (queryStorage.refCount === 0) {
-          clearQueryStorageIfNeeded(queryStorage)
-        }
-      }
-    })
-
+    const observable = getQueryStorageObservable(queryAction)
     if (typeof subscriber === 'function') {
       return observable.subscribe(subscriber)
     }
