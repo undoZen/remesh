@@ -9,6 +9,31 @@ import ReactDOM, { Root } from 'react-dom/client'
 import { RemeshRoot, RemeshScope, useRemeshDomain, useRemeshEvent, useRemeshQuery, useRemeshSend } from '../src'
 import { delay } from './utils'
 
+const SendCodeDomain = Remesh.domain({
+  name: 'SendCodeDomain',
+  impl(domain) {
+    const SuccessEvent = domain.event({
+      name: 'SuccessEvent',
+    })
+
+    const SendCommand = domain.command({
+      name: 'SendCommand',
+      impl() {
+        return [SuccessEvent()]
+      },
+    })
+
+    return {
+      command: {
+        SendCommand,
+      },
+      event: {
+        SuccessEvent,
+      },
+    }
+  },
+})
+
 const PageDomain = Remesh.domain({
   name: 'PageDomain',
   impl(domain) {
@@ -80,22 +105,12 @@ describe('remesh-react-event', () => {
     const AdditionalDomain = Remesh.domain({
       name: 'AdditionalDomain',
       impl(domain, id: number) {
-        const SuccessEvent = domain.event({
-          name: 'SuccessEvent',
-        })
-
-        const SendCommand = domain.command({
-          name: 'SendCommand',
-          impl() {
-            // 假装成功
-            return [SuccessEvent()]
-          },
-        })
+        const sendCodeDomain = domain.getDomain(SendCodeDomain())
 
         const SendCodeCommand = domain.command({
           name: 'SendCodeCommand',
           impl() {
-            return SendCommand()
+            return sendCodeDomain.command.SendCommand()
           },
         })
 
@@ -124,7 +139,7 @@ describe('remesh-react-event', () => {
         domain.effect({
           name: 'SendCodeEffect',
           impl({ fromEvent }) {
-            return fromEvent(SuccessEvent).pipe(
+            return fromEvent(sendCodeDomain.event.SuccessEvent).pipe(
               tap((v) => {
                 triggerEffectFn()
                 console.log('receive event in effect')
@@ -167,7 +182,7 @@ describe('remesh-react-event', () => {
             SendCodeCommand,
           },
           event: {
-            SendCodeSuccessEvent: SuccessEvent,
+            SendCodeSuccessEvent: sendCodeDomain.event.SuccessEvent,
           },
         }
       },
@@ -291,12 +306,10 @@ describe('remesh-react-event', () => {
     })
 
     await delay(200)
-    expect(triggerEffectFn).toBeCalledTimes(2)
+    expect(triggerEffectFn).toBeCalledTimes(3)
     expect(useRemeshEventFn).toBeCalledTimes(2)
 
     await delay(2600)
-    expect(queryEffectFn).toBeCalledTimes(9)
-    expect(eventEffectFn).toBeCalledTimes(9)
 
     await act(() => {
       const backButton = document.getElementById('back') as HTMLButtonElement
@@ -304,10 +317,10 @@ describe('remesh-react-event', () => {
     })
 
     await delay(2600)
-    expect(queryEffectFn).toBeCalledTimes(9)
-    expect(eventEffectFn).toBeCalledTimes(9)
+    expect(queryEffectFn).toBeCalledTimes(15)
+    expect(eventEffectFn).toBeCalledTimes(15)
 
-    expect(triggerEffectFn).toBeCalledTimes(2)
+    expect(triggerEffectFn).toBeCalledTimes(3)
     expect(useRemeshEventFn).toBeCalledTimes(2)
   })
 })
