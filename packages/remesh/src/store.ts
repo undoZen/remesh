@@ -1145,9 +1145,19 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
   ) => {
     const domainStorage = getDomainStorage(domainAction)
 
+    if (domainStorage.refCount === 0) {
+      for (const effect of domainStorage.effectList) {
+        subscribeDomainEffect(domainStorage, effect)
+      }
+    }
+
     const subscription = new Subscription(() => {
       domainStorage.refCount -= 1
       if (domainStorage.refCount === 0) {
+        for (const subscription of domainStorage.effectMap.values()) {
+          subscription.unsubscribe()
+        }
+        domainStorage.effectMap.clear()
         clearDomainStorageIfNeeded(domainStorage)
       }
     })
@@ -1216,13 +1226,9 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
     for (const upstreamDomainStorage of domainStorage.upstreamSet) {
       igniteDomain(upstreamDomainStorage.domainAction)
     }
-
-    for (const effect of domainStorage.effectList) {
-      igniteDomainEffect(domainStorage, effect)
-    }
   }
 
-  const igniteDomainEffect = <T extends RemeshDomainDefinition, U extends Args<Serializable>>(
+  const subscribeDomainEffect = <T extends RemeshDomainDefinition, U extends Args<Serializable>>(
     domainStorage: RemeshDomainStorage<T, U>,
     effect: RemeshEffect,
   ) => {
