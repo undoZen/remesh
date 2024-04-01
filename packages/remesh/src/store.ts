@@ -303,8 +303,10 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
     const observable = new Observable<U>((subscriber) => {
       const subscription = observableMapToImplIfNeeded.subscribe(subscriber)
       eventStorage.refCount += 1
+      console.log(eventStorage.id, ' eventStorage.refCount += 1 ', eventStorage.refCount)
       return () => {
         eventStorage.refCount -= 1
+        console.log(eventStorage.id, ' eventStorage.refCount -= 1 ', eventStorage.refCount)
         subscription.unsubscribe()
         if (eventStorage.refCount === 0) {
           clearEventStorageIfNeeded(eventStorage)
@@ -458,16 +460,19 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
 
   const getQueryStorageObservable = <T extends Args<Serializable>, U>(
     queryAction: RemeshQueryAction<T, U>,
+    type: number = 0,
   ): Observable<U> => {
     const queryStorage = getQueryStorage(queryAction)
 
     return new Observable<U>((subscriber) => {
       const subscription = queryStorage.subject.subscribe(subscriber)
       queryStorage.refCount += 1
+      console.log(' queryStorage.refCount += 1 ', queryStorage.key, type)
 
       return () => {
         queryStorage.refCount -= 1
         subscription.unsubscribe()
+        console.log(' queryStorage.refCount -= 1 ', queryStorage.key, type)
         if (queryStorage.refCount === 0) {
           clearQueryStorageIfNeeded(queryStorage)
         }
@@ -753,6 +758,8 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
   const shouldClearDomainStorage = <T extends RemeshDomainDefinition, U extends Args<Serializable>>(
     domainStorage: RemeshDomainStorage<T, U>,
   ): boolean => {
+    console.log('shouldClearDomainStorage', domainStorage.key)
+    console.log('refCount', domainStorage.refCount)
     if (domainStorage.refCount > 0) {
       return false
     }
@@ -761,6 +768,7 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
       return false
     }
 
+    console.log('downstreamSet.size', domainStorage.downstreamSet.size)
     if (domainStorage.downstreamSet.size !== 0) {
       return false
     }
@@ -770,14 +778,16 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
      * when their refCount is 0, it means there is no consumers outside of the domain
      * so the domain resources can be cleared
      */
-    for (const queryStorage of domainStorage.queryMap.values()) {
-      if (queryStorage.refCount > 0) {
+
+    console.log('eventMap.size', domainStorage.eventMap.size)
+    for (const eventStorage of domainStorage.eventMap.values()) {
+      if (eventStorage.refCount > 0) {
         return false
       }
     }
-
-    for (const eventStorage of domainStorage.eventMap.values()) {
-      if (eventStorage.refCount > 0) {
+    console.log('queryMap.size', domainStorage.queryMap.size)
+    for (const queryStorage of domainStorage.queryMap.values()) {
+      if (queryStorage.refCount > 0) {
         return false
       }
     }
@@ -788,7 +798,9 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
   const clearDomainStorageIfNeeded = <T extends RemeshDomainDefinition, U extends Args<Serializable>>(
     domainStorage: RemeshDomainStorage<T, U>,
   ) => {
+    console.log('clearDomainStorageIfNeeded', domainStorage.key)
     if (shouldClearDomainStorage(domainStorage)) {
+      console.log('clearDomainStorage', domainStorage.key)
       clearDomainStorage(domainStorage)
     }
   }
@@ -838,7 +850,7 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
       throw new Error(`Unexpected input in fromEvent(..): ${Event}`)
     },
     fromQuery: (queryAction) => {
-      return getQueryStorageObservable(queryAction)
+      return getQueryStorageObservable(queryAction, 1)
     },
   }
 
@@ -1161,7 +1173,7 @@ export const RemeshStore = (options?: RemeshStoreOptions) => {
     queryAction: RemeshQueryAction<T, U>,
     subscriber: ((data: U) => unknown) | Partial<Observer<U>>,
   ): Subscription => {
-    const observable = getQueryStorageObservable(queryAction)
+    const observable = getQueryStorageObservable(queryAction, 2)
     if (typeof subscriber === 'function') {
       return observable.subscribe(subscriber)
     }

@@ -4,6 +4,7 @@ import { map, startWith, switchMap, take, tap } from 'rxjs/operators'
 
 import { Remesh } from 'remesh'
 
+import React, { useState } from 'react'
 import ReactDOM, { Root } from 'react-dom/client'
 import { RemeshRoot, RemeshScope, useRemeshDomain, useRemeshEvent, useRemeshQuery, useRemeshSend } from '../src'
 import { delay } from './utils'
@@ -78,7 +79,7 @@ const PageDomain = Remesh.domain({
 
 const COUNTDOWN_SECONDS = 5
 
-jest.setTimeout(10 * 1000)
+jest.setTimeout(15 * 1000)
 describe('remesh-react-event', () => {
   let container!: HTMLDivElement
   let root!: Root
@@ -103,7 +104,7 @@ describe('remesh-react-event', () => {
 
     const AdditionalDomain = Remesh.domain({
       name: 'AdditionalDomain',
-      impl(domain) {
+      impl(domain, id: number) {
         const sendCodeDomain = domain.getDomain(SendCodeDomain())
 
         const SendCodeCommand = domain.command({
@@ -187,9 +188,10 @@ describe('remesh-react-event', () => {
       },
     })
 
-    function Additional() {
+    function Additional({ id }: { id: number }) {
+      console.log('get prop id:', id)
       const send = useRemeshSend()
-      const domain = useRemeshDomain(AdditionalDomain())
+      const domain = useRemeshDomain(AdditionalDomain(id))
 
       useRemeshEvent(domain.event.SendCodeSuccessEvent, () => {
         useRemeshEventFn()
@@ -217,6 +219,7 @@ describe('remesh-react-event', () => {
       const send = useRemeshSend()
       const domain = useRemeshDomain(PageDomain())
       const { step } = useRemeshQuery(domain.query.PageQuery())
+      const [id, setId] = useState(0)
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -232,6 +235,7 @@ describe('remesh-react-event', () => {
             <div
               id={'conflict'}
               onClick={() => {
+                setId((id) => id + 1)
                 send(domain.command.CreateCommand())
               }}
             >
@@ -239,7 +243,7 @@ describe('remesh-react-event', () => {
             </div>
           )}
 
-          {step === 'additional' && <Additional />}
+          {step === 'additional' && <Additional id={id} />}
         </div>
       )
     }
@@ -248,7 +252,7 @@ describe('remesh-react-event', () => {
     await act(() => {
       root.render(
         <RemeshRoot store={store}>
-          <RemeshScope domains={[AdditionalDomain(), SendCodeDomain()]}>
+          <RemeshScope domains={[AdditionalDomain(1), SendCodeDomain()]}>
             <Page />
           </RemeshScope>
         </RemeshRoot>,
@@ -301,7 +305,21 @@ describe('remesh-react-event', () => {
       sendCode.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(triggerEffectFn).toBeCalledTimes(2)
-    expect(useRemeshEventFn).toBeCalledTimes(2)
+    await delay(200)
+    expect(triggerEffectFn).toBeCalledTimes(3)
+    expect(useRemeshEventFn).toBeCalledTimes(3)
+
+    await delay(2600)
+    expect(queryEffectFn).toBeCalledTimes(9)
+    expect(eventEffectFn).toBeCalledTimes(9)
+
+    await act(() => {
+      const backButton = document.getElementById('back') as HTMLButtonElement
+      backButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await delay(2600)
+    expect(queryEffectFn).toBeCalledTimes(9)
+    expect(eventEffectFn).toBeCalledTimes(9)
   })
 })
